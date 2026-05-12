@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFleetStore } from '@/store/fleet-store';
 import { cn } from '@/lib/utils';
@@ -57,45 +57,57 @@ export default function ObservabilityStack() {
   const systemMetrics = useFleetStore((s) => s.systemMetrics);
   const pipelineStages = useFleetStore((s) => s.pipelineStages);
 
-  // Simulated service statuses
+  // Service statuses — deterministic from pipeline health
   const serviceStatuses = useMemo(() => {
-    return SERVICES.map((svc) => {
-      const health = Math.random();
+    const healthFactor = systemMetrics.pipelineHealth / 100;
+    return SERVICES.map((svc, i) => {
+      // Use index + pipelineHealth for deterministic but varied results
+      const seed = (i * 17 + Math.round(healthFactor * 100)) % 100;
       let status: 'healthy' | 'degraded' | 'down';
-      if (health > 0.15) status = 'healthy';
-      else if (health > 0.03) status = 'degraded';
-      else status = 'down';
+      if (healthFactor > 0.8) {
+        status = seed > 10 ? 'healthy' : 'degraded';
+      } else if (healthFactor > 0.5) {
+        status = seed > 40 ? 'healthy' : seed > 10 ? 'degraded' : 'down';
+      } else {
+        status = seed > 60 ? 'degraded' : 'down';
+      }
       return { ...svc, status };
     });
-  }, [pipelineStages]);
+  }, [systemMetrics.pipelineHealth]);
+
+  // Client-only mount flag to avoid Date hydration mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Simulated log entries
   const logEntries = useMemo(() => {
-    const now = Date.now();
+    const base = mounted ? Date.now() : 0;
     return Array.from({ length: 15 }, (_, i) => ({
       id: i,
       message: LOG_MESSAGES[i % LOG_MESSAGES.length],
-      time: new Date(now - i * 2500).toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }),
+      time: mounted
+        ? new Date(base - i * 2500).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })
+        : '--:--:--',
     }));
-  }, [throughputHistory]);
+  }, [throughputHistory, mounted]);
 
   // Simulated alerts
   const alerts = useMemo(() => {
     const res: Array<{ id: string; severity: string; message: string; time: string }> = [];
     const degradedServices = serviceStatuses.filter((s) => s.status !== 'healthy');
+    const now = mounted
+      ? new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      : '--:--';
     degradedServices.forEach((s) => {
       res.push({
         id: `alert-${s.name}`,
         severity: s.status === 'down' ? 'critical' : 'warning',
         message: `${s.name} is ${s.status === 'down' ? 'unreachable' : 'degraded'}`,
-        time: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        time: now,
       });
     });
     if (systemMetrics.pipelineHealth < 80) {
@@ -103,14 +115,11 @@ export default function ObservabilityStack() {
         id: 'alert-pipeline',
         severity: 'warning',
         message: `Pipeline health below 80%: ${systemMetrics.pipelineHealth}%`,
-        time: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        time: now,
       });
     }
     return res;
-  }, [serviceStatuses, systemMetrics.pipelineHealth]);
+  }, [serviceStatuses, systemMetrics.pipelineHealth, mounted]);
 
   const healthStroke =
     systemMetrics.pipelineHealth > 80

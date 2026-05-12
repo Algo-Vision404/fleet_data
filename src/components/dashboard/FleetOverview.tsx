@@ -57,9 +57,9 @@ export default function FleetOverview() {
       (systemMetrics.pipelineHealth / 100) * 20
     );
 
-    // Model confidence (simulated)
+    // Model confidence — deterministic from pipeline health + fleet state
     const modelConfidence = Math.round(
-      85 + Math.random() * 12 - (emergency * 3)
+      85 + (systemMetrics.pipelineHealth / 100) * 10 - (emergency * 3)
     );
 
     // Critical alerts
