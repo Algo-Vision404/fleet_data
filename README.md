@@ -127,7 +127,7 @@ bun run build
 bun start
 ```
 
-The app runs on `http://localhost:3000`.
+The app runs on `https://fleet-data.vercel.app`.
 
 ## Dashboard Tabs
 
