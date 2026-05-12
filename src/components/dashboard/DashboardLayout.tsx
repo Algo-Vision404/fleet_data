@@ -55,7 +55,7 @@ export default function DashboardLayout({
   ).length;
 
   return (
-    <div className="min-h-screen flex bg-[#0a0f1a] text-[#f9fafb]">
+    <div className="min-h-screen flex bg-black text-[#f9fafb]">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -137,7 +137,7 @@ export default function DashboardLayout({
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header */}
-        <header className="sticky top-0 z-30 bg-[#0a0f1a]/80 backdrop-blur-xl border-b border-[#1f2937]">
+        <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-[#1f2937]">
           <div className="flex items-center justify-between px-4 py-3 lg:px-6">
             <div className="flex items-center gap-3">
               <Button

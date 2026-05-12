@@ -347,7 +347,7 @@ export default function ObservabilityStack() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="bg-[#0a0f1a] rounded-lg p-3 max-h-48 overflow-y-auto custom-scrollbar font-mono text-[11px] space-y-0.5">
+          <div className="bg-black rounded-lg p-3 max-h-48 overflow-y-auto custom-scrollbar font-mono text-[11px] space-y-0.5">
             {logEntries.map((log) => {
               const isError = log.message.includes('[ERROR]');
               const isWarn = log.message.includes('[WARN]');
