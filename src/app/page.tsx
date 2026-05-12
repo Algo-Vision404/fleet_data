@@ -234,17 +234,40 @@ export default function Home() {
 
         if (cancelled) return;
 
-        // Hydrate the store
-        store.updateVehicles(fleetData.vehicles);
-        store.addEvents(eventsData.events);
-        store.addPrioritizedEvents(generateSyntheticPrioritizedEvents(eventsData.events));
-        store.updatePipeline(pipelineData.stages);
-        store.updateMetrics({ ...metricsData, pipelineHealth: pipelineData.overallHealth });
-        store.addThroughputPoints(analyticsData.throughput);
-        store.addLatencyPoints(analyticsData.latency);
-        store.addDisengagementPoints(analyticsData.disengagement);
-        store.addDriftPoints(analyticsData.drift);
-        store.updateRegionAnomalies(analyticsData.regionAnomalies);
+        // Hydrate the store — rehydrate Date fields from JSON strings
+        if (fleetData?.vehicles) {
+          const vehicles = fleetData.vehicles.map((v: any) => ({
+            ...v,
+            lastUpdated: new Date(v.lastUpdated),
+          }));
+          store.updateVehicles(vehicles);
+        }
+
+        if (eventsData?.events) {
+          const events = eventsData.events.map((e: any) => ({
+            ...e,
+            timestamp: new Date(e.timestamp),
+          }));
+          store.addEvents(events);
+          store.addPrioritizedEvents(generateSyntheticPrioritizedEvents(events));
+        }
+
+        if (pipelineData?.stages) {
+          store.updatePipeline(pipelineData.stages);
+        }
+
+        store.updateMetrics({
+          ...metricsData,
+          pipelineHealth: pipelineData?.overallHealth ?? 0,
+        });
+
+        if (analyticsData) {
+          if (analyticsData.throughput) store.addThroughputPoints(analyticsData.throughput);
+          if (analyticsData.latency) store.addLatencyPoints(analyticsData.latency);
+          if (analyticsData.disengagement) store.addDisengagementPoints(analyticsData.disengagement);
+          if (analyticsData.drift) store.addDriftPoints(analyticsData.drift);
+          if (analyticsData.regionAnomalies) store.updateRegionAnomalies(analyticsData.regionAnomalies);
+        }
       } catch (err) {
         console.error('Failed to load initial data from API:', err);
       }

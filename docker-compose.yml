@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:./db/custom.db
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - fleet-network
+
+  # Backend Holder 1: Simulation Engine
+  simulation-engine:
+    build: ./mini-services/simulation-engine
+    ports:
+      - "8001:8001"
+    networks:
+      - fleet-network
+
+  # Backend Holder 2: Analytics Engine
+  analytics-engine:
+    build: ./mini-services/analytics-engine
+    ports:
+      - "8002:8002"
+    networks:
+      - fleet-network
+
+networks:
+  fleet-network:
+    driver: bridge

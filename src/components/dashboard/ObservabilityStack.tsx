@@ -10,7 +10,8 @@ import {
 } from 'recharts';
 import { Activity, Clock, Server, XCircle, AlertTriangle } from 'lucide-react';
 
-const SERVICES = ['Kafka', 'Spark', 'PostgreSQL', 'Redis', 'MinIO', 'Grafana'];
+const SERVICES = ['Simulation-Engine', 'Analytics-Engine', 'Kafka', 'Spark', 'PostgreSQL', 'Redis'];
+
 
 const LOG_MESSAGES = [
   '[INFO] Ingestion pipeline batch #8473 completed successfully',
