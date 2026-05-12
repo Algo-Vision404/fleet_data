@@ -2,7 +2,6 @@
 
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useFleetStore } from '@/store/fleet-store';
 import {
   Car,
@@ -12,10 +11,14 @@ import {
   AlertTriangle,
   Activity,
   Cpu,
-  TrendingUp,
-  TrendingDown,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
+// Strict 3-color status system: green=ok, amber=warn, red=bad
+type Status = 'ok' | 'warn' | 'bad';
+
+function statusColor(s: Status): string {
+  return s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444';
+}
 
 export default function FleetOverview() {
   const vehicles = useFleetStore((s) => s.vehicles);
@@ -29,54 +32,38 @@ export default function FleetOverview() {
     const maintenance = vehicles.filter((v) => v.status === 'maintenance').length;
     const emergency = vehicles.filter((v) => v.status === 'emergency_stop').length;
     const total = vehicles.length || 1;
-
     const activePct = ((active / total) * 100).toFixed(1);
 
-    // Events per minute (from recent events)
     const recentEvents = events.filter(
       (e) => Date.now() - e.timestamp.getTime() < 60000
     );
     const eventsPerMin = recentEvents.length;
 
-    // Disengagement rate per 1000 miles
     const totalDisengagements = vehicles.reduce((s, v) => s + v.disengagementCount, 0);
     const totalMiles = vehicles.reduce((s, v) => s + v.totalMiles, 0) || 1;
     const disengagementRate = ((totalDisengagements / totalMiles) * 1000).toFixed(2);
 
-    // Edge cases: high + urgent priority
     const edgeCases = events.filter(
-      (e) =>
-        e.severity === 'critical' ||
-        e.severity === 'high'
+      (e) => e.severity === 'critical' || e.severity === 'high'
     ).length;
 
-    // Fleet health: weighted score
     const fleetHealth = Math.round(
       (active / total) * 60 +
       ((100 - emergency / total * 100) / 100) * 20 +
       (systemMetrics.pipelineHealth / 100) * 20
     );
 
-    // Model confidence — deterministic from pipeline health + fleet state
     const modelConfidence = Math.round(
       85 + (systemMetrics.pipelineHealth / 100) * 10 - (emergency * 3)
     );
 
-    // Critical alerts
     const criticalAlerts = events.filter(
       (e) => e.severity === 'critical' && !e.acknowledged
     ).length;
 
     return {
-      active,
-      activePct,
-      total,
-      charging,
-      idle,
-      maintenance,
-      emergency,
-      eventsPerMin,
-      disengagementRate,
+      active, activePct, total, charging, idle, maintenance, emergency,
+      eventsPerMin, disengagementRate,
       dataIngested: systemMetrics.dataIngestedGB.toFixed(1),
       edgeCases,
       fleetHealth: Math.min(99, Math.max(fleetHealth, 45)),
@@ -86,102 +73,22 @@ export default function FleetOverview() {
     };
   }, [vehicles, events, systemMetrics]);
 
-  const cards = [
-    {
-      title: 'Active Vehicles',
-      value: `${stats.active}/${stats.total}`,
-      subtitle: `${stats.activePct}% fleet online`,
-      icon: Car,
-      trend: 'up' as const,
-      accent: 'emerald',
-      stat: stats.activePct,
-    },
-    {
-      title: 'Events / min',
-      value: stats.eventsPerMin.toString(),
-      subtitle: `Throughput: ${stats.throughput.toFixed(0)} eps`,
-      icon: Zap,
-      trend: stats.eventsPerMin > 5 ? 'up' as const : 'down' as const,
-      accent: 'amber',
-      stat: stats.eventsPerMin,
-    },
-    {
-      title: 'Disengagement Rate',
-      value: `${stats.disengagementRate}`,
-      subtitle: 'per 1,000 miles',
-      icon: Shield,
-      trend: parseFloat(stats.disengagementRate) > 2 ? 'up' as const : 'down' as const,
-      accent: parseFloat(stats.disengagementRate) > 3 ? 'red' : 'amber',
-      stat: parseFloat(stats.disengagementRate),
-    },
-    {
-      title: 'Data Ingested',
-      value: `${stats.dataIngested} GB`,
-      subtitle: 'All-time telemetry',
-      icon: Database,
-      trend: 'up' as const,
-      accent: 'cyan',
-      stat: parseFloat(stats.dataIngested),
-    },
-    {
-      title: 'Edge Cases Found',
-      value: stats.edgeCases.toString(),
-      subtitle: 'Rare/novel events today',
-      icon: AlertTriangle,
-      trend: stats.edgeCases > 10 ? 'up' as const : 'down' as const,
-      accent: 'amber',
-      stat: stats.edgeCases,
-    },
-    {
-      title: 'Fleet Health',
-      value: `${stats.fleetHealth}%`,
-      subtitle:
-        stats.fleetHealth > 80
-          ? 'All systems nominal'
-          : stats.fleetHealth > 60
-          ? 'Minor issues detected'
-          : 'Attention required',
-      icon: Activity,
-      trend: stats.fleetHealth > 75 ? 'up' as const : 'down' as const,
-      accent: stats.fleetHealth > 80 ? 'emerald' : stats.fleetHealth > 60 ? 'amber' : 'red',
-      stat: stats.fleetHealth,
-    },
-    {
-      title: 'Model Confidence',
-      value: `${stats.modelConfidence}%`,
-      subtitle: 'Avg autopilot confidence',
-      icon: Cpu,
-      trend: 'up' as const,
-      accent: 'emerald',
-      stat: stats.modelConfidence,
-    },
-    {
-      title: 'Critical Alerts',
-      value: stats.criticalAlerts.toString(),
-      subtitle: 'Unacknowledged',
-      icon: TrendingUp,
-      trend: stats.criticalAlerts > 5 ? 'up' as const : 'down' as const,
-      accent: stats.criticalAlerts > 3 ? 'red' : 'emerald',
-      stat: stats.criticalAlerts,
-    },
+  const cards: Array<{
+    title: string; value: string; sub: string;
+    icon: typeof Car; status: Status;
+  }> = [
+    { title: 'Active Vehicles', value: `${stats.active}/${stats.total}`, sub: `${stats.activePct}% fleet online`, icon: Car, status: 'ok' },
+    { title: 'Events / min', value: stats.eventsPerMin.toString(), sub: `${stats.throughput.toFixed(0)} eps throughput`, icon: Zap, status: 'ok' },
+    { title: 'Disengagement Rate', value: stats.disengagementRate, sub: 'per 1,000 miles', icon: Shield, status: parseFloat(stats.disengagementRate) > 2.5 ? 'bad' : 'ok' },
+    { title: 'Data Ingested', value: `${stats.dataIngested} GB`, sub: 'All-time telemetry', icon: Database, status: 'ok' },
+    { title: 'Edge Cases', value: stats.edgeCases.toString(), sub: 'Rare/novel events today', icon: AlertTriangle, status: stats.edgeCases > 15 ? 'warn' : 'ok' },
+    { title: 'Fleet Health', value: `${stats.fleetHealth}%`, sub: stats.fleetHealth > 80 ? 'Nominal' : stats.fleetHealth > 60 ? 'Minor issues' : 'Attention needed', icon: Activity, status: stats.fleetHealth > 80 ? 'ok' : stats.fleetHealth > 60 ? 'warn' : 'bad' },
+    { title: 'Model Confidence', value: `${stats.modelConfidence}%`, sub: 'Avg autopilot confidence', icon: Cpu, status: stats.modelConfidence > 85 ? 'ok' : 'warn' },
+    { title: 'Critical Alerts', value: stats.criticalAlerts.toString(), sub: 'Unacknowledged', icon: AlertTriangle, status: stats.criticalAlerts > 3 ? 'bad' : stats.criticalAlerts > 0 ? 'warn' : 'ok' },
   ];
 
-  const accentMap: Record<string, string> = {
-    emerald: 'border-emerald-500/40 bg-emerald-500/5',
-    amber: 'border-amber-500/40 bg-amber-500/5',
-    red: 'border-red-500/40 bg-red-500/5',
-    cyan: 'border-cyan-500/40 bg-cyan-500/5',
-  };
-
-  const iconColorMap: Record<string, string> = {
-    emerald: 'text-emerald-400 bg-emerald-500/10',
-    amber: 'text-amber-400 bg-amber-500/10',
-    red: 'text-red-400 bg-red-500/10',
-    cyan: 'text-cyan-400 bg-cyan-500/10',
-  };
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-white">Fleet Overview</h2>
         <p className="text-sm text-[#6b7280] mt-0.5">
@@ -189,66 +96,52 @@ export default function FleetOverview() {
         </p>
       </div>
 
-      {/* Status badges row */}
-      <div className="flex flex-wrap gap-2">
-        <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-          {stats.active} Active
-        </Badge>
-        <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30">
-          {stats.idle} Idle
-        </Badge>
-        <Badge className="bg-cyan-500/15 text-cyan-400 border-cyan-500/30">
-          {stats.charging} Charging
-        </Badge>
-        <Badge className="bg-gray-500/15 text-gray-400 border-gray-500/30">
-          {stats.maintenance} Maintenance
-        </Badge>
+      {/* Fleet status bar — simple dots */}
+      <div className="flex items-center gap-4 text-xs text-[#9ca3af]">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#10b981]" /> {stats.active} Active
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> {stats.idle} Idle
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#6b7280]" /> {stats.charging} Charging
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#374151]" /> {stats.maintenance} Maint.
+        </span>
         {stats.emergency > 0 && (
-          <Badge className="bg-red-500/15 text-red-400 border-red-500/30 animate-pulse">
-            {stats.emergency} Emergency
-          </Badge>
+          <span className="flex items-center gap-1.5 text-[#ef4444]">
+            <span className="w-2 h-2 rounded-full bg-[#ef4444] animate-pulse" /> {stats.emergency} Emergency
+          </span>
         )}
       </div>
 
-      {/* KPI Cards grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+      {/* KPI Cards — neutral cards, white values, colored status dot only */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card
-              key={card.title}
-              className={cn(
-                'bg-[#111827] border transition-all duration-300 hover:shadow-lg',
-                accentMap[card.accent]
-              )}
-            >
+            <Card key={card.title} className="bg-[#111827] border-[#1f2937]">
               <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
-                <CardTitle className="text-xs font-medium text-[#9ca3af]">
+                <CardTitle className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wider">
                   {card.title}
                 </CardTitle>
-                <div
-                  className={cn(
-                    'w-7 h-7 rounded-lg flex items-center justify-center',
-                    iconColorMap[card.accent]
-                  )}
-                >
-                  <Icon className="w-3.5 h-3.5" />
+                <div className="w-7 h-7 rounded-md bg-[#1a2235] flex items-center justify-center">
+                  <Icon className="w-3.5 h-3.5 text-[#6b7280]" />
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-2xl font-bold text-white">{card.value}</p>
-                    <p className="text-[11px] text-[#6b7280] mt-0.5">
-                      {card.subtitle}
-                    </p>
-                  </div>
-                  {card.trend === 'up' ? (
-                    <TrendingUp className="w-4 h-4 text-emerald-400 opacity-60" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4 text-red-400 opacity-60" />
-                  )}
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold text-white">{card.value}</p>
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: statusColor(card.status) }}
+                  />
                 </div>
+                <p className="text-[11px] text-[#4b5563] mt-1">
+                  {card.sub}
+                </p>
               </CardContent>
             </Card>
           );

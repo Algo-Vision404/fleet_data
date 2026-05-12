@@ -3,7 +3,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFleetStore } from '@/store/fleet-store';
 import { cn } from '@/lib/utils';
@@ -15,7 +14,6 @@ import {
   CheckCircle,
   Clock,
   Car,
-  MapPin,
 } from 'lucide-react';
 
 const EVENT_TYPE_FILTERS = [
@@ -33,6 +31,14 @@ const EVENT_TYPE_FILTERS = [
 
 const SEVERITY_FILTERS = ['all', 'critical', 'high', 'medium', 'low'];
 
+// Severity config — solid left border + icon, neutral card background
+const SEV_CONFIG: Record<string, { color: string; label: string }> = {
+  critical: { color: '#ef4444', label: 'CRIT' },
+  high:     { color: '#f59e0b', label: 'HIGH' },
+  medium:   { color: '#6b7280', label: 'MED' },
+  low:      { color: '#374151', label: 'LOW' },
+};
+
 export default function EventTimeline() {
   const events = useFleetStore((s) => s.events);
   const acknowledgeEvent = useFleetStore((s) => s.acknowledgeEvent);
@@ -49,64 +55,26 @@ export default function EventTimeline() {
       .slice(0, 50);
   }, [events, typeFilter, severityFilter]);
 
-  const severityConfig: Record<
-    string,
-    { icon: typeof AlertOctagon; color: string; bgColor: string; borderColor: string }
-  > = {
-    critical: {
-      icon: AlertOctagon,
-      color: 'text-red-400',
-      bgColor: 'bg-red-500/10',
-      borderColor: 'border-red-500/40',
-    },
-    high: {
-      icon: AlertTriangle,
-      color: 'text-amber-400',
-      bgColor: 'bg-amber-500/10',
-      borderColor: 'border-amber-500/40',
-    },
-    medium: {
-      icon: AlertCircle,
-      color: 'text-orange-400',
-      bgColor: 'bg-orange-500/10',
-      borderColor: 'border-orange-500/40',
-    },
-    low: {
-      icon: Info,
-      color: 'text-[#9ca3af]',
-      bgColor: 'bg-[#9ca3af]/10',
-      borderColor: 'border-[#9ca3af]/40',
-    },
-  };
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-white">Event Timeline</h2>
-        <p className="text-sm text-[#6b7280] mt-0.5">
+        <h2 className="text-sm font-semibold text-white">Event Timeline</h2>
+        <p className="text-[11px] text-[#4b5563] mt-0.5">
           Real-time event detection feed sorted by priority
         </p>
       </div>
 
-      {/* Severity filter tabs */}
-      <div className="flex gap-1.5 flex-wrap">
+      {/* Severity filter */}
+      <div className="flex gap-1 flex-wrap">
         {SEVERITY_FILTERS.map((sev) => (
           <button
             key={sev}
             onClick={() => setSeverityFilter(sev)}
             className={cn(
-              'px-2.5 py-1 rounded-md text-xs font-medium transition-colors capitalize',
+              'px-2 py-1 rounded text-[11px] font-medium transition-colors capitalize',
               severityFilter === sev
-                ? 'bg-emerald-500/20 text-emerald-400'
-                : 'bg-[#111827] text-[#9ca3af] hover:bg-white/5'
+                ? 'bg-white text-black'
+                : 'bg-[#1a1a1a] text-[#6b7280] hover:text-[#9ca3af]'
             )}
           >
             {sev}
@@ -115,16 +83,16 @@ export default function EventTimeline() {
       </div>
 
       {/* Type filters */}
-      <div className="flex gap-1.5 flex-wrap">
+      <div className="flex gap-1 flex-wrap">
         {EVENT_TYPE_FILTERS.map((f) => (
           <button
             key={f.id}
             onClick={() => setTypeFilter(f.id)}
             className={cn(
-              'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+              'px-1.5 py-0.5 rounded text-[10px] transition-colors',
               typeFilter === f.id
-                ? 'bg-white/10 text-white'
-                : 'text-[#6b7280] hover:text-[#9ca3af]'
+                ? 'bg-[#1a1a1a] text-white'
+                : 'text-[#374151] hover:text-[#6b7280]'
             )}
           >
             {f.label}
@@ -133,85 +101,69 @@ export default function EventTimeline() {
       </div>
 
       {/* Event list */}
-      <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto custom-scrollbar">
+      <div className="space-y-1.5 max-h-[calc(100vh-380px)] overflow-y-auto custom-scrollbar">
         {filteredEvents.length === 0 ? (
-          <div className="text-center py-12 text-[#6b7280] text-sm">
+          <div className="text-center py-12 text-[#374151] text-xs">
             No events match your filters.
           </div>
         ) : (
           filteredEvents.map((event) => {
-            const config = severityConfig[event.severity] || severityConfig.low;
-            const SevIcon = config.icon;
-            const isCritical = event.severity === 'critical';
+            const config = SEV_CONFIG[event.severity] || SEV_CONFIG.low;
+            const isCritical = event.severity === 'critical' && !event.acknowledged;
 
             return (
               <motion.div
                 key={event.eventId}
-                initial={{ opacity: 0, x: -10 }}
+                initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.15 }}
               >
                 <Card
                   className={cn(
-                    'bg-[#111827] border transition-all',
-                    config.borderColor,
-                    event.acknowledged && 'opacity-50',
-                    isCritical && !event.acknowledged && 'animate-pulse-border'
+                    'bg-[#111827] border-[#1a1a1a] border-l-2',
+                    event.acknowledged && 'opacity-40',
                   )}
+                  style={{ borderLeftColor: config.color }}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">
-                      {/* Severity icon */}
-                      <div
-                        className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
-                          config.bgColor
-                        )}
+                      {/* Severity badge */}
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded mt-0.5 shrink-0"
+                        style={{ color: config.color, backgroundColor: `${config.color}15` }}
                       >
-                        <SevIcon className={cn('w-4 h-4', config.color)} />
-                      </div>
+                        {config.label}
+                      </span>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 h-4 capitalize border-[#1f2937] text-[#9ca3af]"
-                          >
-                            {event.type.replace('_', ' ')}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 h-4 font-mono border-[#1f2937] text-[#9ca3af]"
-                          >
-                            <Car className="w-2.5 h-2.5 mr-0.5" />
-                            {event.vehicleId}
-                          </Badge>
-                          <span className="text-[10px] text-[#6b7280] flex items-center gap-0.5">
+                          <span className="text-[10px] text-[#4b5563] uppercase">{event.type.replace('_', ' ')}</span>
+                          <span className="text-[10px] font-mono text-[#374151]">{event.vehicleId}</span>
+                          <span className="text-[10px] text-[#374151] flex items-center gap-0.5">
                             <Clock className="w-2.5 h-2.5" />
-                            {formatTime(event.timestamp)}
+                            {event.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </span>
                         </div>
-                        <p className="text-xs text-[#d1d5db] leading-relaxed">
+                        <p className="text-[11px] text-[#9ca3af] leading-relaxed">
                           {event.description}
                         </p>
                       </div>
 
-                      {/* Actions */}
+                      {/* Acknowledge */}
                       <div className="shrink-0">
-                        {!event.acknowledged && (
+                        {!event.acknowledged ? (
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                            className="h-6 px-2 text-[10px] text-[#6b7280] hover:text-white hover:bg-[#1a1a1a]"
                             onClick={() => acknowledgeEvent(event.eventId)}
                           >
                             <CheckCircle className="w-3 h-3 mr-1" />
                             Ack
                           </Button>
-                        )}
-                        {event.acknowledged && (
-                          <CheckCircle className="w-4 h-4 text-emerald-500/50" />
+                        ) : (
+                          <CheckCircle className="w-3.5 h-3.5 text-[#374151]" />
                         )}
                       </div>
                     </div>
