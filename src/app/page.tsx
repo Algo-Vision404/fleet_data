@@ -27,6 +27,18 @@ import {
   updatePipeline,
   getPipelineState,
 } from '@/lib/pipeline-engine';
+import {
+  generateSyntheticVehicles,
+  generateSyntheticEvents,
+  generateSyntheticPrioritizedEvents,
+  generateSyntheticPipeline,
+  generateSyntheticThroughput,
+  generateSyntheticLatency,
+  generateSyntheticDisengagement,
+  generateSyntheticDrift,
+  generateSyntheticRegionAnomalies,
+  generateSyntheticMetrics,
+} from '@/lib/synthetic-data';
 import type { Vehicle } from '@/lib/fleet-simulator';
 
 const stopSimulationRef = { current: null as (() => void) | null };
@@ -142,18 +154,21 @@ function beginSimulations(vehicles: Vehicle[]) {
       threshold: 2.5,
     });
 
+    const driftBase = 88 + (Math.sin(Date.now() / 10000) * 4) + (Math.cos(Date.now() / 7000) * 2);
     state.addDriftPoint({
       time: timeStr,
-      actual: Math.round((88 + Math.random() * 10) * 10) / 10,
+      actual: Math.round(driftBase * 10) / 10,
       expected: 92,
     });
 
-    const regions = [
+    const regionSeeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const regionNames = [
       'SoMa', 'Mission', 'Castro', 'Haight', 'Richmond',
       'Sunset', 'Dogpatch', 'Potrero', 'Bayview', 'Marina',
-    ].map((region) => ({
+    ];
+    const regions = regionNames.map((region, idx) => ({
       region,
-      anomalies: Math.floor(Math.random() * 20) + 1,
+      anomalies: 2 + Math.floor(Math.abs(Math.sin(Date.now() / 5000 + regionSeeds[idx])) * 18),
     }));
     state.updateRegionAnomalies(regions);
   }, 2000);
@@ -203,17 +218,28 @@ export default function Home() {
     }
   }, [store]);
 
-  // Initialize on mount
+  // Initialize on mount with synthetic data
   useEffect(() => {
-    const vehicles = initializeVehicles(50);
+    const vehicles = generateSyntheticVehicles(50);
     store.updateVehicles(vehicles);
 
-    const pipeline = initializePipeline();
-    store.updatePipeline(pipeline.stages);
-    store.updateMetrics({
-      pipelineHealth: pipeline.overallHealth,
-      activeVehicles: vehicles.filter((v) => v.status === 'active').length,
-    });
+    const events = generateSyntheticEvents();
+    store.addEvents(events);
+
+    const prioritized = generateSyntheticPrioritizedEvents(events);
+    store.addPrioritizedEvents(prioritized);
+
+    const pipeline = generateSyntheticPipeline();
+    store.updatePipeline(pipeline);
+
+    store.addThroughputPoints(generateSyntheticThroughput(30));
+    store.addLatencyPoints(generateSyntheticLatency(30));
+    store.addDisengagementPoints(generateSyntheticDisengagement(30));
+    store.addDriftPoints(generateSyntheticDrift(30));
+    store.updateRegionAnomalies(generateSyntheticRegionAnomalies());
+
+    const metrics = generateSyntheticMetrics();
+    store.updateMetrics(metrics);
 
     return () => {
       clearAllIntervals();

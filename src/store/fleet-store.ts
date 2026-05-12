@@ -72,9 +72,13 @@ export interface FleetStore {
   acknowledgeEvent: (eventId: string) => void;
   setActiveTab: (tab: string) => void;
   addThroughputPoint: (point: ThroughputDataPoint) => void;
+  addThroughputPoints: (points: ThroughputDataPoint[]) => void;
   addLatencyPoint: (point: LatencyDataPoint) => void;
+  addLatencyPoints: (points: LatencyDataPoint[]) => void;
   addDisengagementPoint: (point: DisengagementDataPoint) => void;
+  addDisengagementPoints: (points: DisengagementDataPoint[]) => void;
   addDriftPoint: (point: DriftDataPoint) => void;
+  addDriftPoints: (points: DriftDataPoint[]) => void;
   updateRegionAnomalies: (regions: RegionData[]) => void;
 }
 
@@ -150,20 +154,32 @@ export const useFleetStore = create<FleetStore>((set) => ({
       throughputHistory: [...state.throughputHistory.slice(-59), point],
     })),
 
+  addThroughputPoints: (points) =>
+    set(() => ({ throughputHistory: points })),
+
   addLatencyPoint: (point) =>
     set((state) => ({
       latencyHistory: [...state.latencyHistory.slice(-59), point],
     })),
+
+  addLatencyPoints: (points) =>
+    set(() => ({ latencyHistory: points })),
 
   addDisengagementPoint: (point) =>
     set((state) => ({
       disengagementHistory: [...state.disengagementHistory.slice(-59), point],
     })),
 
+  addDisengagementPoints: (points) =>
+    set(() => ({ disengagementHistory: points })),
+
   addDriftPoint: (point) =>
     set((state) => ({
       driftHistory: [...state.driftHistory.slice(-59), point],
     })),
+
+  addDriftPoints: (points) =>
+    set(() => ({ driftHistory: points })),
 
   updateRegionAnomalies: (regions) => set({ regionAnomalies: regions }),
 }));
