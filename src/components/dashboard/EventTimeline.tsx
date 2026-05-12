@@ -7,13 +7,8 @@ import { Button } from '@/components/ui/button';
 import { useFleetStore } from '@/store/fleet-store';
 import { cn } from '@/lib/utils';
 import {
-  AlertOctagon,
-  AlertTriangle,
-  AlertCircle,
-  Info,
   CheckCircle,
   Clock,
-  Car,
 } from 'lucide-react';
 
 const EVENT_TYPE_FILTERS = [
@@ -31,12 +26,12 @@ const EVENT_TYPE_FILTERS = [
 
 const SEVERITY_FILTERS = ['all', 'critical', 'high', 'medium', 'low'];
 
-// Severity config — solid left border + icon, neutral card background
-const SEV_CONFIG: Record<string, { color: string; label: string }> = {
-  critical: { color: '#ef4444', label: 'CRIT' },
-  high:     { color: '#f59e0b', label: 'HIGH' },
-  medium:   { color: '#6b7280', label: 'MED' },
-  low:      { color: '#374151', label: 'LOW' },
+// Severity config — solid left border + badge, clean card background
+const SEV_CONFIG: Record<string, { color: string; bgColor: string; label: string }> = {
+  critical: { color: '#ef4444', bgColor: '#2a1010', label: 'CRITICAL' },
+  high:     { color: '#f59e0b', bgColor: '#2a2010', label: 'HIGH' },
+  medium:   { color: '#6b7280', bgColor: '#1a1a1a', label: 'MEDIUM' },
+  low:      { color: '#4b5563', bgColor: '#1a1a1a', label: 'LOW' },
 };
 
 export default function EventTimeline() {
@@ -58,9 +53,9 @@ export default function EventTimeline() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold text-white">Event Timeline</h2>
-        <p className="text-[11px] text-[#4b5563] mt-0.5">
-          Real-time event detection feed sorted by priority
+        <h2 className="text-lg font-semibold text-white">Event Timeline</h2>
+        <p className="text-sm text-[#9ca3af] mt-1">
+          Real-time event detection feed — {filteredEvents.length} events
         </p>
       </div>
 
@@ -71,10 +66,10 @@ export default function EventTimeline() {
             key={sev}
             onClick={() => setSeverityFilter(sev)}
             className={cn(
-              'px-2 py-1 rounded text-[11px] font-medium transition-colors capitalize',
+              'px-3 py-1.5 rounded text-xs font-medium transition-colors capitalize',
               severityFilter === sev
                 ? 'bg-white text-black'
-                : 'bg-[#1a1a1a] text-[#6b7280] hover:text-[#9ca3af]'
+                : 'bg-[#1a1a1a] text-[#9ca3af] hover:text-white hover:bg-[#252525]'
             )}
           >
             {sev}
@@ -83,16 +78,16 @@ export default function EventTimeline() {
       </div>
 
       {/* Type filters */}
-      <div className="flex gap-1 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap">
         {EVENT_TYPE_FILTERS.map((f) => (
           <button
             key={f.id}
             onClick={() => setTypeFilter(f.id)}
             className={cn(
-              'px-1.5 py-0.5 rounded text-[10px] transition-colors',
+              'px-2 py-1 rounded text-xs transition-colors border',
               typeFilter === f.id
-                ? 'bg-[#1a1a1a] text-white'
-                : 'text-[#374151] hover:text-[#6b7280]'
+                ? 'bg-[#1a1a1a] text-white border-[#333]'
+                : 'bg-transparent text-[#9ca3af] border-[#1a1a1a] hover:text-white hover:border-[#333]'
             )}
           >
             {f.label}
@@ -101,36 +96,32 @@ export default function EventTimeline() {
       </div>
 
       {/* Event list */}
-      <div className="space-y-1.5 max-h-[calc(100vh-380px)] overflow-y-auto custom-scrollbar">
+      <div className="space-y-2 max-h-[calc(100vh-420px)] overflow-y-auto custom-scrollbar">
         {filteredEvents.length === 0 ? (
-          <div className="text-center py-12 text-[#374151] text-xs">
+          <div className="text-center py-16 text-[#6b7280] text-sm">
             No events match your filters.
           </div>
         ) : (
           filteredEvents.map((event) => {
             const config = SEV_CONFIG[event.severity] || SEV_CONFIG.low;
-            const isCritical = event.severity === 'critical' && !event.acknowledged;
 
             return (
               <motion.div
                 key={event.eventId}
                 initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
+                animate={{ opacity: event.acknowledged ? 0.4 : 1, x: 0 }}
                 transition={{ duration: 0.15 }}
               >
                 <Card
-                  className={cn(
-                    'bg-[#111827] border-[#1a1a1a] border-l-2',
-                    event.acknowledged && 'opacity-40',
-                  )}
-                  style={{ borderLeftColor: config.color }}
+                  className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg"
+                  style={{ borderLeft: `3px solid ${config.color}` }}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">
                       {/* Severity badge */}
                       <span
-                        className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded mt-0.5 shrink-0"
-                        style={{ color: config.color, backgroundColor: `${config.color}15` }}
+                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded mt-0.5 shrink-0"
+                        style={{ color: config.color, backgroundColor: config.bgColor }}
                       >
                         {config.label}
                       </span>
@@ -138,14 +129,22 @@ export default function EventTimeline() {
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="text-[10px] text-[#4b5563] uppercase">{event.type.replace('_', ' ')}</span>
-                          <span className="text-[10px] font-mono text-[#374151]">{event.vehicleId}</span>
-                          <span className="text-[10px] text-[#374151] flex items-center gap-0.5">
-                            <Clock className="w-2.5 h-2.5" />
-                            {event.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          <span className="text-xs text-[#d1d5db] font-medium">
+                            {event.type.replace('_', ' ')}
+                          </span>
+                          <span className="text-xs font-mono text-[#6b7280]">
+                            {event.vehicleId}
+                          </span>
+                          <span className="text-xs text-[#6b7280] flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {event.timestamp.toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })}
                           </span>
                         </div>
-                        <p className="text-[11px] text-[#9ca3af] leading-relaxed">
+                        <p className="text-xs text-[#9ca3af] leading-relaxed">
                           {event.description}
                         </p>
                       </div>
@@ -156,14 +155,14 @@ export default function EventTimeline() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-2 text-[10px] text-[#6b7280] hover:text-white hover:bg-[#1a1a1a]"
+                            className="h-7 px-2.5 text-xs text-[#9ca3af] hover:text-white hover:bg-[#1a1a1a]"
                             onClick={() => acknowledgeEvent(event.eventId)}
                           >
-                            <CheckCircle className="w-3 h-3 mr-1" />
+                            <CheckCircle className="w-3.5 h-3.5 mr-1" />
                             Ack
                           </Button>
                         ) : (
-                          <CheckCircle className="w-3.5 h-3.5 text-[#374151]" />
+                          <CheckCircle className="w-4 h-4 text-[#4b5563]" />
                         )}
                       </div>
                     </div>

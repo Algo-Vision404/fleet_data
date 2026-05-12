@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { useFleetStore } from '@/store/fleet-store';
-import { cn } from '@/lib/utils';
 
 const GRID_COLS = 30;
 const GRID_ROWS = 20;
@@ -15,12 +14,32 @@ const REGION_NAMES = [
   'Financial', 'Embarcadero', 'Presidio', 'Park Merced', 'Oceanview',
 ];
 
+// Solid color bands — no gradients, clean discrete steps
+const HEAT_COLORS = [
+  '#0a0a0a', // 0: empty
+  '#0f2b1a', // 1: very low — dark green
+  '#164e2b', // 2: low — green
+  '#1a7a3d', // 3: moderate — brighter green
+  '#f59e0b', // 4: high — solid amber
+  '#ef4444', // 5: critical — solid red
+];
+
+function getHeatColor(intensity: number): string {
+  if (intensity <= 0) return HEAT_COLORS[0];
+  if (intensity < 0.15) return HEAT_COLORS[1];
+  if (intensity < 0.3) return HEAT_COLORS[2];
+  if (intensity < 0.5) return HEAT_COLORS[3];
+  if (intensity < 0.75) return HEAT_COLORS[4];
+  return HEAT_COLORS[5];
+}
+
 export default function EventHeatmap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const events = useFleetStore((s) => s.events);
   const vehicles = useFleetStore((s) => s.vehicles);
+  const [isReady, setIsReady] = useState(false);
 
   // Calculate event density per grid cell
   const gridData = useMemo(() => {
@@ -42,7 +61,7 @@ export default function EventHeatmap() {
       }
     });
 
-    // Add vehicle presence (lighter)
+    // Add vehicle presence (lighter weight)
     vehicles.forEach((v) => {
       const col = Math.floor(
         ((v.gps.lng - SF_BAY.lngMin) / (SF_BAY.lngMax - SF_BAY.lngMin)) * GRID_COLS
@@ -72,7 +91,11 @@ export default function EventHeatmap() {
     const dpr = window.devicePixelRatio || 1;
     const rect = container.getBoundingClientRect();
     const w = rect.width;
-    const h = Math.max(400, Math.min(500, w * 0.5));
+
+    // Guard against zero-width containers (can happen during tab transitions)
+    if (w < 10) return;
+
+    const h = Math.max(360, Math.min(480, w * 0.5));
 
     canvas.width = w * dpr;
     canvas.height = h * dpr;
@@ -88,54 +111,63 @@ export default function EventHeatmap() {
     const cellH = h / GRID_ROWS;
 
     // Background
-    ctx.fillStyle = '#0d1320';
+    ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, w, h);
 
-    // Draw grid cells
+    // Draw grid cells with solid colors
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const density = gridData[row][col];
         const intensity = Math.min(density / maxDensity, 1);
-
         const color = getHeatColor(intensity);
-        ctx.fillStyle = color;
-        ctx.fillRect(col * cellW + 0.5, row * cellH + 0.5, cellW - 1, cellH - 1);
 
-        // Grid border
-        ctx.strokeStyle = 'rgba(31, 41, 55, 0.4)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(col * cellW + 0.5, row * cellH + 0.5, cellW - 1, cellH - 1);
+        ctx.fillStyle = color;
+        ctx.fillRect(col * cellW + 1, row * cellH + 1, cellW - 2, cellH - 2);
+
+        // Subtle grid border
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(col * cellW, row * cellH, cellW, cellH);
       }
     }
 
     // Draw vehicle dots
     const SF_BAY = { latMin: 37.6, latMax: 37.85, lngMin: -122.55, lngMax: -122.3 };
     vehicles.forEach((v) => {
-      if (v.status !== 'active') return;
       const x = ((v.gps.lng - SF_BAY.lngMin) / (SF_BAY.lngMax - SF_BAY.lngMin)) * w;
       const y = ((v.gps.lat - SF_BAY.latMin) / (SF_BAY.latMax - SF_BAY.latMin)) * h;
 
       ctx.beginPath();
       ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = v.status === 'emergency_stop' ? '#ef4444' : '#10b981';
+      // Use solid colors: red for emergency, white for active, gray for others
+      ctx.fillStyle = v.status === 'emergency_stop' ? '#ef4444' : v.status === 'active' ? '#ffffff' : '#4b5563';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
     });
   }, [gridData, maxDensity, vehicles]);
 
+  // Draw after mount + a frame delay to handle AnimatePresence sizing
   useEffect(() => {
-    drawHeatmap();
+    setIsReady(false);
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        drawHeatmap();
+        setIsReady(true);
+      });
+    });
+
     const handleResize = () => drawHeatmap();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [drawHeatmap]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const tooltip = tooltipRef.current;
-    if (!canvas || !tooltip) return;
+    if (!canvas || !tooltip || !isReady) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -146,12 +178,15 @@ export default function EventHeatmap() {
     if (row >= 0 && row < GRID_ROWS && col >= 0 && col < GRID_COLS) {
       const density = gridData[row][col];
       const regionName = REGION_NAMES[(row * GRID_COLS + col) % REGION_NAMES.length];
+      const intensity = Math.min(density / maxDensity, 1);
+      const levelLabel = intensity <= 0 ? 'Clear' : intensity < 0.15 ? 'Minimal' : intensity < 0.3 ? 'Low' : intensity < 0.5 ? 'Moderate' : intensity < 0.75 ? 'High' : 'Critical';
+
       tooltip.style.display = 'block';
       tooltip.style.left = `${x + 12}px`;
       tooltip.style.top = `${y - 8}px`;
       tooltip.innerHTML = `
-        <div class="text-xs font-medium text-white">${regionName} (${col}, ${row})</div>
-        <div class="text-[10px] text-[#9ca3af]">Event density: ${density.toFixed(1)}</div>
+        <div style="color:#f3f4f6;font-size:12px;font-weight:500;">${regionName}</div>
+        <div style="color:#9ca3af;font-size:11px;">Density: ${density.toFixed(1)} — ${levelLabel}</div>
       `;
     }
   };
@@ -165,13 +200,13 @@ export default function EventHeatmap() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-white">Event Heatmap</h2>
-        <p className="text-sm text-[#6b7280] mt-0.5">
-          Geographic event density in the San Francisco Bay Area
+        <h2 className="text-lg font-semibold text-white">Event Heatmap</h2>
+        <p className="text-sm text-[#9ca3af] mt-1">
+          Geographic event density — San Francisco Bay Area
         </p>
       </div>
 
-      <Card className="bg-[#111827] border-[#1f2937]">
+      <Card className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg">
         <CardContent className="p-4">
           <div ref={containerRef} className="relative">
             <canvas
@@ -182,21 +217,35 @@ export default function EventHeatmap() {
             />
             <div
               ref={tooltipRef}
-              className="absolute hidden bg-[#1f2937] border border-[#374151] rounded-lg px-2.5 py-1.5 shadow-xl pointer-events-none z-10"
+              className="absolute hidden bg-[#1a1a1a] border border-[#333] rounded-md px-2.5 py-1.5 shadow-xl pointer-events-none z-10"
             />
 
-            {/* Legend */}
+            {/* Legend — solid color blocks */}
             <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span className="text-[10px] text-[#6b7280]">Active Vehicle</span>
-                <div className="w-2.5 h-2.5 rounded-full bg-red-400 ml-3" />
-                <span className="text-[10px] text-[#6b7280]">Emergency</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                  <span className="text-xs text-[#9ca3af]">Active</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
+                  <span className="text-xs text-[#9ca3af]">Emergency</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#4b5563]" />
+                  <span className="text-xs text-[#9ca3af]">Idle</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-[#6b7280] mr-1">Low</span>
-                <div className="w-24 h-2.5 rounded-sm" style={{ background: 'linear-gradient(to right, #064e3b, #10b981, #f59e0b, #ef4444)' }} />
-                <span className="text-[10px] text-[#6b7280] ml-1">High</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#9ca3af]">Low</span>
+                <div className="flex gap-0.5">
+                  <div className="w-5 h-2.5 rounded-sm" style={{ backgroundColor: '#0f2b1a' }} />
+                  <div className="w-5 h-2.5 rounded-sm" style={{ backgroundColor: '#164e2b' }} />
+                  <div className="w-5 h-2.5 rounded-sm" style={{ backgroundColor: '#1a7a3d' }} />
+                  <div className="w-5 h-2.5 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
+                  <div className="w-5 h-2.5 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
+                </div>
+                <span className="text-xs text-[#9ca3af]">High</span>
               </div>
             </div>
           </div>
@@ -204,22 +253,4 @@ export default function EventHeatmap() {
       </Card>
     </div>
   );
-}
-
-function getHeatColor(intensity: number): string {
-  if (intensity === 0) return '#0d1320';
-  if (intensity < 0.2) {
-    const t = intensity / 0.2;
-    return `rgb(${lerp(13, 16, t)}, ${lerp(19, 185, t)}, ${lerp(32, 129, t)})`;
-  }
-  if (intensity < 0.5) {
-    const t = (intensity - 0.2) / 0.3;
-    return `rgb(${lerp(16, 245, t)}, ${lerp(185, 158, t)}, ${lerp(129, 11, t)})`;
-  }
-  const t = Math.min((intensity - 0.5) / 0.5, 1);
-  return `rgb(${lerp(245, 239, t)}, ${lerp(158, 68, t)}, ${lerp(11, 68, t)})`;
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return Math.round(a + (b - a) * t);
 }

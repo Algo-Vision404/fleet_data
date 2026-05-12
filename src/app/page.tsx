@@ -277,6 +277,12 @@ export default function Home() {
       case 'events':
         return (
           <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Events</h2>
+              <p className="text-sm text-[#9ca3af] mt-1">
+                Detected safety events, timeline view and geographic density
+              </p>
+            </div>
             <EventTimeline />
             <EventHeatmap />
           </div>
