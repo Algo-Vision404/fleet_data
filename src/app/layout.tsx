@@ -15,9 +15,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FleetMind AI — Autonomous Fleet Data Intelligence",
   description: "Real-time fleet telemetry analytics and edge case discovery for autonomous vehicles",
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
 };
 
 export default function RootLayout({
