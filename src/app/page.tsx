@@ -28,16 +28,7 @@ import {
   getPipelineState,
 } from '@/lib/pipeline-engine';
 import {
-  generateSyntheticVehicles,
-  generateSyntheticEvents,
   generateSyntheticPrioritizedEvents,
-  generateSyntheticPipeline,
-  generateSyntheticThroughput,
-  generateSyntheticLatency,
-  generateSyntheticDisengagement,
-  generateSyntheticDrift,
-  generateSyntheticRegionAnomalies,
-  generateSyntheticMetrics,
 } from '@/lib/synthetic-data';
 import type { Vehicle } from '@/lib/fleet-simulator';
 
@@ -218,30 +209,51 @@ export default function Home() {
     }
   }, [store]);
 
-  // Initialize on mount with synthetic data
+  // Initialize on mount — fetch all data from backend API
   useEffect(() => {
-    const vehicles = generateSyntheticVehicles(50);
-    store.updateVehicles(vehicles);
+    let cancelled = false;
 
-    const events = generateSyntheticEvents();
-    store.addEvents(events);
+    async function loadInitialData() {
+      try {
+        // Fetch fleet, events, metrics, pipeline, analytics in parallel
+        const [fleetRes, eventsRes, metricsRes, pipelineRes, analyticsRes] = await Promise.all([
+          fetch('/api/fleet'),
+          fetch('/api/events?limit=50'),
+          fetch('/api/metrics'),
+          fetch('/api/pipeline'),
+          fetch('/api/analytics'),
+        ]);
 
-    const prioritized = generateSyntheticPrioritizedEvents(events);
-    store.addPrioritizedEvents(prioritized);
+        if (cancelled) return;
 
-    const pipeline = generateSyntheticPipeline();
-    store.updatePipeline(pipeline);
+        const fleetData = await fleetRes.json();
+        const eventsData = await eventsRes.json();
+        const metricsData = await metricsRes.json();
+        const pipelineData = await pipelineRes.json();
+        const analyticsData = await analyticsRes.json();
 
-    store.addThroughputPoints(generateSyntheticThroughput(30));
-    store.addLatencyPoints(generateSyntheticLatency(30));
-    store.addDisengagementPoints(generateSyntheticDisengagement(30));
-    store.addDriftPoints(generateSyntheticDrift(30));
-    store.updateRegionAnomalies(generateSyntheticRegionAnomalies());
+        if (cancelled) return;
 
-    const metrics = generateSyntheticMetrics();
-    store.updateMetrics(metrics);
+        // Hydrate the store
+        store.updateVehicles(fleetData.vehicles);
+        store.addEvents(eventsData.events);
+        store.addPrioritizedEvents(generateSyntheticPrioritizedEvents(eventsData.events));
+        store.updatePipeline(pipelineData.stages);
+        store.updateMetrics({ ...metricsData, pipelineHealth: pipelineData.overallHealth });
+        store.addThroughputPoints(analyticsData.throughput);
+        store.addLatencyPoints(analyticsData.latency);
+        store.addDisengagementPoints(analyticsData.disengagement);
+        store.addDriftPoints(analyticsData.drift);
+        store.updateRegionAnomalies(analyticsData.regionAnomalies);
+      } catch (err) {
+        console.error('Failed to load initial data from API:', err);
+      }
+    }
+
+    loadInitialData();
 
     return () => {
+      cancelled = true;
       clearAllIntervals();
     };
   }, []);
